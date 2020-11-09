@@ -199,5 +199,5 @@ min(cv_lasso$cvm)
 ### Calculamos error con test
 ```{r}
 pred <- predict(cv_lasso, s = cv_lasso$lambda.min, ames_test_x)
-mean((ames_test_y - pred)^2) #el error de la prediccion es menor que 
+mean((ames_test_y - pred)^2) 
 ```
