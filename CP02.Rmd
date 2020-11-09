@@ -1,0 +1,203 @@
+---
+title: "CV y Regularización NBA"
+author: "Daniel Corral Ruiz"
+date: "09-11-2020"
+output:
+  html_document:
+    theme: journal
+    df_print: paged
+  prettydoc::html_pretty:
+    highlight: github
+---
+
+## Objetivo de la práctica
+Estudiar la relación entre la información de los jugadores con el salario que reciben.
+
+### Variables estudiadas
+
+En primer lugar es importante conocer el dataset que tenemos en tre manos por
+ello se explicarán las variables de la base de datos:
+
+- Player : nombre y apellido del jugador de la nba.
+
+- Salary : salario actual que cobra.
+
+- NBA_Country : país de donde procede.
+
+- NBA_DraftNumber : número de draft
+
+- Age : edad del jugador.
+
+- Tm : equipo del jugador.
+
+- G : número de partidos jugados.
+
+- MP : minutos jugados.
+
+- PER : rendimiento del jugador, media 15.
+
+- TS% : porcentaje tiros acertados.
+
+- 3PAr : porcentaje intento tiros de 3.
+
+- ORB% :  Porcentaje de rebote ofensivo Una estimación del porcentaje de rebotes ofensivos disponibles que un jugador agarró mientras estaba en el suelo.
+
+- DRB% : Porcentaje de rebote defensivo Una estimación del porcentaje de rebotes defensivos disponibles que un jugador agarró mientras estaba en el suelo.
+
+- TRB% : Porcentaje de rebote total Estimación del porcentaje de rebotes disponibles que un jugador agarró mientras estaba en el suelo.
+
+- AST: Es una estimación del porcentaje de tiros de campo de un compañero de equipo que un jugador asistió mientras estaba en el suelo.
+
+- STL% :Porcentaje de robo mientras estaba en el suelo.
+
+- BLK% :Porcentaje de bloqueo mientras estaba en el partido. 
+
+
+- TOV% : Porcentaje de rotación. Una estimación de las perdidas de balón cometidas por cada 100 jugadas.
+
+- USG : Porcentaje de uso. Una estimación del porcentaje de jugadores de equipo usadas por un jugador mientras estaba en el suelo.
+
+- OWS : Estimación de número de ganancias aportadas por un jugador debido a su ofensa.
+
+- DWS : Una estimación del número de ganancias aportadas por un jugador debido a su ofensa.
+
+- WS : Estimación del número de victorias aportadas por un jugador.
+
+- WS/48 : Estimación del número de victorias aportadas por un jugador por 48 minutos. Promedio de 100.
+
+- OBPM : Estimación de la puntuación de caja de los puntos ofensivos por cada 100 posesiones que un jugador contribuyó por encima del promedio de la liga.
+
+- DBPM : Estimación de los puntos defensivos por cada 100 posesiones que un jugador contribuyó por encima del promedio de la liga.
+
+- BPM : Una estimación de la puntuación de caja de los puntos por cada 100 posesiones que un jugador contribuyó por encima de un jugador promedio de la liga, traducido a un equipo promedio.
+
+- VORP : Valor sobre el jugador de reemplazo Una estimación de la puntuación de caja de los puntos por cada 100 posesiones del equipo que un jugador contribuyó por encima del nivel de reemplazo (-2.0).
+
+
+### Carga de librerias
+```{r echo=FALSE,warning= FALSE, message=FALSE}
+library(here) # Comentar
+library(tidyverse)
+library(janitor) # Clean names
+library(skimr) # Beautiful Summarize
+library(magrittr) # Pipe operators
+library(corrplot) # Correlations
+library(ggcorrplot)  # Correlations
+library(PerformanceAnalytics) # Correlations
+library(leaps) # Model selection
+library(MASS)
+library(dplyr)
+library(readr)
+library(gvlma)
+library(MASS)
+library(car)
+library(glmnet)
+library(boot)
+library(leaps)
+library(rsample)
+```
+
+### Carga de datos
+
+```{r Carga de datos,include=FALSE}
+mData=read.csv("./nba.csv")
+```
+
+### Limpieza de datos
+
+```{r}
+mData = na.omit(mData)
+duplicated(mData)
+nrow(mData[duplicated(mData$Player),])
+mData <- mData[!duplicated(mData$Player),]
+mData1 <- mData[,-1]
+mData1 <- mData1[,-2]
+mData1 <- mData1[,-4]
+```
+
+### Modificamos salario
+
+```{r}
+mData1 <- mData1 %>% mutate(Salary=log(Salary))
+```
+
+### Hacemos división del dataset
+Creamos training 70% y test 30%. Hay que poner semilla para la reproductividad. Creamos matrices de entrenamiento y vectores de respuesta. Eliminamos la intercepción.
+
+```{r}
+set.seed(1234)
+ames_split <- initial_split(mData1, prop = .7, strata = "Salary")
+ames_train <- training(ames_split)
+ames_test  <- testing(ames_split)
+
+ames_train_x <- model.matrix(Salary ~ ., ames_train)[, -1]
+ames_train_y <- log(ames_train$Salary)
+
+ames_test_x <- model.matrix(Salary ~ ., ames_test)[, -1]
+ames_test_y <- log(ames_test$Salary)
+```
+
+¿Cuál es la dimension de la matriz?
+```{r}
+dim(ames_train_x)
+```
+
+### Elastic net
+Para realizar una regresión cresta podemos usar la función glmnet. El parametro alpha le dice a la función que realice una regresión cresta (alpha=0), lasso (alpha=1).
+
+```{r}
+lasso    <- glmnet(ames_train_x, ames_train_y, alpha = 1.0) 
+elastic1 <- glmnet(ames_train_x, ames_train_y, alpha = 0.25) 
+elastic2 <- glmnet(ames_train_x, ames_train_y, alpha = 0.75) 
+ridge    <- glmnet(ames_train_x, ames_train_y, alpha = 0.0)
+
+par(mfrow = c(2, 2), mar = c(6, 4, 6, 2) + 0.1)
+plot(lasso, xvar = "lambda", main = "Lasso (Alpha = 1)\n\n\n")
+plot(elastic1, xvar = "lambda", main = "Elastic Net (Alpha = .25)\n\n\n")
+plot(elastic2, xvar = "lambda", main = "Elastic Net (Alpha = .75)\n\n\n")
+plot(ridge, xvar = "lambda", main = "Ridge (Alpha = 0)\n\n\n")
+```
+
+```{r}
+fold_id <- sample(1:10, size = length(ames_train_y), replace=TRUE)
+
+tuning_grid <- tibble::tibble(
+  alpha      = seq(0, 1, by = 0.05),
+  mse_min    = NA,
+  mse_1se    = NA,
+  lambda_min = NA,
+  lambda_1se = NA
+)
+tuning_grid
+```
+
+
+```{r}
+for(i in seq_along(tuning_grid$alpha)) {
+  
+  fit <- cv.glmnet(ames_train_x, ames_train_y, alpha = tuning_grid$alpha[i], foldid = fold_id)
+  
+  # Se sacan los minimun square errors y lambdas
+  tuning_grid$mse_min[i]    <- fit$cvm[fit$lambda == fit$lambda.min]
+  tuning_grid$mse_1se[i]    <- fit$cvm[fit$lambda == fit$lambda.1se]
+  tuning_grid$lambda_min[i] <- fit$lambda.min
+  tuning_grid$lambda_1se[i] <- fit$lambda.1se
+}
+tuning_grid
+```
+
+ El que menor que menor lambda nos da es el alpha correspondiente a 1 que corresponde a lasso. Último alpha de nuestra tabla.
+
+
+### Calculamos error de lasso
+```{r}
+cv_lasso   <- cv.glmnet(ames_train_x, ames_train_y, alpha = 1.0)
+min(cv_lasso$cvm)
+```
+
+
+### Calculamos error con test
+```{r}
+pred <- predict(cv_lasso, s = cv_lasso$lambda.min, ames_test_x)
+mean((ames_test_y - pred)^2) #el error de la prediccion es menor que 
+```
